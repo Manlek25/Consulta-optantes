@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pandas
+openpyxl
+requests
+xlrd
+jinja2
+python-multipart
+sse-starlette

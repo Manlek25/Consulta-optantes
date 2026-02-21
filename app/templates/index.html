@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Consulta Optantes (Lote)</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>Consulta Optantes — Em Lote</h1>
+      <p>Envie um arquivo CSV ou XLSX com CNPJs e receba a Situação no Simples Nacional e no SIMEI.</p>
+    </header>
+
+    <main class="card">
+      <form id="formUpload">
+        <div class="row">
+          <label class="label">Arquivo (CSV ou XLSX)</label>
+          <input id="file" name="file" type="file" accept=".csv,.xlsx,.xls" required />
+          <small class="hint">Coluna aceita: <b>cnpj</b> (ou variações). Pode ter pontuação.</small>
+        </div>
+
+        <div class="grid">
+          <div class="row">
+            <label class="label">Formato de saída</label>
+            <select id="output">
+              <option value="xlsx" selected>XLSX (Excel)</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label class="label">Delay entre consultas</label>
+            <select id="delay">
+              <option value="12.5" selected>12.5s (recomendado — API pública)</option>
+              <option value="15">15s (seguro)</option>
+              <option value="20">20s (bem seguro)</option>
+            </select>
+            <small class="hint">API pública do CNPJá limita a <b>5 consultas/min</b> por IP (use 12.5s+).</small>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="processBtn" type="submit">Processar</button>
+          <button class="btnSecondary" id="cancelBtn" type="button" hidden>Cancelar</button>
+        </div>
+
+        <div id="status" class="status" hidden>
+          <div class="spinner" id="spinner" aria-hidden="true"></div>
+          <div style="flex:1">
+            <div class="statusTitle" id="statusTitle">Processando...</div>
+            <div class="statusSub" id="statusSub">0/0</div>
+            <div class="bar">
+              <div class="barFill" id="barFill" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="error" class="error" hidden></div>
+      </form>
+    </main>
+
+    <footer class="foot">
+      <small>Uso interno • Evite lotes gigantes sem necessidade (recomendado: até alguns milhares com delay).</small>
+    </footer>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+
+</html>
