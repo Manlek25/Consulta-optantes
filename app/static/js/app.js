@@ -69,6 +69,73 @@ form.addEventListener("submit", async (e) => {
   let jobId = null;
   let es = null;
   let canceled = false;
+  let pollTimer = null;
+
+  async function pollStatusAndMaybeDownload() {
+    if (!jobId) return;
+    try {
+      const st = await fetch(`/status/${jobId}`);
+      if (!st.ok) return;
+      const s = await st.json();
+
+      const progress = s.progress || 0;
+      const total = s.total || 0;
+      const pct = total ? Math.round((progress / total) * 100) : 0;
+      statusSub.textContent = `${progress}/${total} (${pct}%)`;
+      barFill.style.width = `${pct}%`;
+
+      if (s.status === "error") {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        showError(`Erro: ${s.error || "Falha no processamento"}`);
+        setLoading(false);
+        return;
+      }
+
+      if (s.status === "canceled") {
+        statusTitle.textContent = "Cancelado";
+      }
+
+      if (s.status === "done" || (s.status === "canceled" && s.has_file)) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        statusTitle.textContent = canceled ? "Cancelado — gerando download parcial..." : "Gerando download...";
+        barFill.style.width = "100%";
+
+        const down = await fetch(`/download/${jobId}`);
+        if (!down.ok) {
+          const t = await down.text();
+          throw new Error(t);
+        }
+        const blob = await down.blob();
+        const filename = canceled
+          ? (output === "csv" ? "resultado_parcial.csv" : "resultado_parcial.xlsx")
+          : (output === "csv" ? "resultado.csv" : "resultado.xlsx");
+
+        const a = document.createElement("a");
+        const url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        setLoading(false);
+      }
+    } catch {
+      // deixa tentar no próximo tick
+    }
+  }
+
+  function startPollingFallback() {
+    if (pollTimer) return;
+    // Mantém a UX: não acusa erro, só troca o modo de acompanhamento
+    statusTitle.textContent = "Processando... (acompanhando via checagem)";
+    pollTimer = setInterval(pollStatusAndMaybeDownload, 2000);
+    // roda uma vez imediatamente
+    pollStatusAndMaybeDownload();
+  }
 
   const doCancel = async () => {
     if (!jobId) return;
@@ -79,6 +146,10 @@ form.addEventListener("submit", async (e) => {
       await fetch(`/cancel/${jobId}`, { method: "POST" });
     } catch {}
     if (es) es.close();
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
     // a gente vai checar status até virar canceled/done, e então baixar parcial (se houver)
     try {
       const st = await fetch(`/status/${jobId}`);
@@ -126,6 +197,13 @@ form.addEventListener("submit", async (e) => {
     statusTitle.textContent = "Processando...";
 
     es = new EventSource(`/progresso/${jobId}`);
+
+    es.addEventListener("open", () => {
+      // conexão de progresso aberta
+    });
+
+    // ping é só keepalive
+    es.addEventListener("ping", () => {});
 
     es.addEventListener("progress", (ev) => {
       const payload = JSON.parse(ev.data);
@@ -223,16 +301,18 @@ form.addEventListener("submit", async (e) => {
 
           // se ainda está rodando/cancelando, ignora oscilação
           if (s.status === "running" || s.status === "queued" || s.status === "canceling") {
+            // Em alguns provedores (ex.: Render) SSE pode cair durante streams longas.
+            // Fazemos fallback para polling sem interromper o job.
+            if (es) es.close();
+            startPollingFallback();
             return;
           }
         }
       } catch {}
 
-      // fallback: se não conseguiu checar status, mostra aviso leve
-      // (não fecha o app, mas libera o botão)
-      showError("Falha ao acompanhar progresso (SSE). Tente novamente.");
-      setLoading(false);
+      // Se não conseguiu checar status, ainda assim tentamos continuar via polling
       if (es) es.close();
+      startPollingFallback();
     };
   } catch (err) {
     showError(`Erro: ${err.message}`);

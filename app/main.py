@@ -176,6 +176,10 @@ async def progresso(job_id: str):
 
     async def event_generator():
         last = -1
+        last_ping = asyncio.get_event_loop().time()
+
+        # Sinaliza ao client para tentar reconectar rapidamente caso a conexão caia
+        yield {"event": "open", "data": "ok", "retry": 5000}
         while True:
             job = JOBS.get(job_id)
             if not job:
@@ -194,6 +198,12 @@ async def progresso(job_id: str):
                     "done": job["done"],
                 }
                 yield {"event": "progress", "data": json.dumps(payload, ensure_ascii=False)}
+
+            # Keep-alive (alguns proxies derrubam SSE em streams "silenciosos")
+            now = asyncio.get_event_loop().time()
+            if now - last_ping >= 15:
+                last_ping = now
+                yield {"event": "ping", "data": "keepalive"}
 
             if job["done"]:
                 yield {"event": "done", "data": "ok"}
